@@ -1,120 +1,338 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Sentinel VR - Road Safety</title>
+    <title>Sentinel VR - Road Safety Experience</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-</head>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: Arial, sans-serif; }
 
+        /* ── INTRO OVERLAY ── */
+        #intro-overlay {
+            position: fixed; inset: 0; z-index: 999;
+            background: radial-gradient(ellipse at 50% 30%, #0d1b3e 0%, #020208 80%);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 18px;
+            transition: opacity 1.2s ease;
+        }
+        #intro-overlay.fade-out { opacity: 0; pointer-events: none; }
+        #intro-overlay h1 {
+            font-size: clamp(36px, 6vw, 72px); font-weight: 900;
+            color: #fff; letter-spacing: 8px; text-align: center;
+            text-shadow: 0 0 40px rgba(230,57,70,0.6);
+        }
+        #intro-overlay h1 span { display: block; font-size: 0.36em; color: #e63946; letter-spacing: 12px; margin-top: 8px; font-weight: 400; }
+        #intro-overlay p { color: #7a8899; font-size: 15px; letter-spacing: 2px; text-align: center; max-width: 480px; line-height: 1.7; }
+        #intro-overlay button {
+            background: #e63946; color: #fff; border: none;
+            padding: 16px 54px; font-size: 18px; letter-spacing: 3px;
+            cursor: pointer; border-radius: 3px; font-weight: 700;
+            box-shadow: 0 0 30px rgba(230,57,70,0.5);
+            transition: all .2s;
+        }
+        #intro-overlay button:hover { background: #c1121f; transform: scale(1.05); }
+        .badge { border: 1px solid #e63946; color: #e63946; font-size: 11px; letter-spacing: 4px; padding: 5px 20px; border-radius: 2px; }
+
+        /* ── HUD ── */
+        #hud {
+            position: fixed; inset: 0; z-index: 50;
+            pointer-events: none; display: none;
+        }
+        #hud-top { display: flex; justify-content: space-between; padding: 16px 20px; }
+        .hud-box {
+            background: rgba(0,0,0,0.6); border: 1px solid rgba(0,255,200,0.2);
+            border-radius: 6px; padding: 10px 18px;
+            font-family: 'Courier New', monospace;
+        }
+        .hud-lbl { font-size: 10px; color: #446677; letter-spacing: 1px; margin-bottom: 3px; }
+        .hud-val { font-size: 16px; color: #00ffcc; font-weight: 700; }
+        #phase-banner {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Courier New', monospace;
+            font-size: clamp(22px, 4vw, 42px);
+            color: #fff; text-align: center;
+            opacity: 0; transition: opacity .4s;
+            text-shadow: 0 0 20px #fff;
+            pointer-events: none;
+        }
+        #phase-banner.show { opacity: 1; }
+        #phase-banner.danger { color: #e63946; text-shadow: 0 0 30px #e63946; }
+        #phase-banner.warning { color: #ffd60a; text-shadow: 0 0 30px #ffd60a; }
+        #progress-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: #111; }
+        #progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg,#00ffcc,#e63946); transition: width .6s; }
+
+        /* ── CRASH FLASH ── */
+        #crash-flash { position: fixed; inset: 0; z-index: 800; pointer-events: none; background: transparent; }
+        #crash-flash.flash { animation: flashAnim .6s ease-out forwards; }
+        @keyframes flashAnim {
+            0%   { background: rgba(230,57,70,0.95); }
+            30%  { background: rgba(255,120,0,0.7); }
+            100% { background: transparent; }
+        }
+
+        /* ── CONSEQUENCE SCREEN ── */
+        #consequence-screen {
+            position: fixed; inset: 0; z-index: 900;
+            background: #080808; display: none;
+            flex-direction: column; align-items: center;
+            justify-content: center; padding: 24px; gap: 20px;
+            opacity: 0; transition: opacity 1s;
+        }
+        #consequence-screen.show { opacity: 1; }
+        #consequence-screen h2 { font-size: clamp(28px, 5vw, 52px); color: #e63946; letter-spacing: 5px; font-weight: 900; text-align: center; }
+        #consequence-screen .sub { color: #334; font-size: 12px; letter-spacing: 3px; }
+        .stat-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+        .stat-card { background: #0f0f0f; border: 1px solid #1e1e1e; border-radius: 8px; padding: 18px 28px; text-align: center; }
+        .stat-num { font-size: 30px; font-weight: 900; color: #e63946; }
+        .stat-lbl { font-size: 10px; color: #445; margin-top: 4px; letter-spacing: 1px; }
+        .impact-bars { width: 100%; max-width: 460px; }
+        .ibar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+        .ibar-name { font-size: 12px; color: #778; width: 120px; text-align: right; flex-shrink: 0; }
+        .ibar-track { flex: 1; height: 7px; background: #1a1a1a; border-radius: 4px; overflow: hidden; }
+        .ibar-fill { height: 100%; border-radius: 4px; width: 0%; transition: width 1.6s cubic-bezier(.4,0,.2,1); }
+        .btn-green { background: transparent; border: 2px solid #00ffcc; color: #00ffcc; padding: 13px 38px; font-size: 14px; letter-spacing: 2px; cursor: pointer; border-radius: 3px; font-weight: 700; transition: all .2s; }
+        .btn-green:hover { background: rgba(0,255,204,0.12); }
+
+        /* ── PRECAUTIONS ── */
+        #prec-screen {
+            position: fixed; inset: 0; z-index: 901;
+            background: #030510; display: none;
+            flex-direction: column; align-items: center;
+            padding: 24px 16px; overflow-y: auto; gap: 14px;
+            opacity: 0; transition: opacity 1s;
+        }
+        #prec-screen.show { opacity: 1; }
+        #prec-screen h2 { font-size: clamp(18px, 3vw, 30px); color: #00ffcc; letter-spacing: 4px; font-weight: 700; margin-top: 10px; }
+        #prec-screen .sub { color: #223344; font-size: 11px; letter-spacing: 2px; margin-bottom: 8px; }
+        .prec-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: 14px; width: 100%; max-width: 840px; }
+        .prec-card { background: #0b0f18; border: 1px solid #152030; border-radius: 10px; padding: 16px; display: flex; gap: 14px; transition: border-color .2s; }
+        .prec-card:hover { border-color: rgba(0,255,204,0.3); }
+        .prec-icon { width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+        .prec-card h4 { font-size: 13px; color: #ccd; margin-bottom: 5px; font-weight: 600; }
+        .prec-card p { font-size: 11px; color: #445566; line-height: 1.65; }
+        .insurance-box { background: #040d04; border: 1px solid #102010; border-radius: 10px; padding: 22px; width: 100%; max-width: 840px; }
+        .ins-title { font-size: 14px; color: #4caf50; letter-spacing: 2px; font-weight: 700; margin-bottom: 12px; }
+        .ins-badges { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+        .ins-badge { background: #081208; border: 1px solid #163016; border-radius: 4px; padding: 6px 14px; font-size: 11px; color: #4caf50; }
+        .ins-note { font-size: 11px; color: #334433; line-height: 1.8; }
+        .btn-red { background: transparent; border: 2px solid #e63946; color: #e63946; padding: 11px 30px; font-size: 12px; letter-spacing: 2px; cursor: pointer; border-radius: 3px; font-weight: 700; transition: all .2s; margin-bottom: 24px; }
+        .btn-red:hover { background: rgba(230,57,70,0.1); }
+    </style>
+</head>
 <body>
 
-<a-scene>
+<!-- ════════════════════════════════
+     INTRO OVERLAY
+════════════════════════════════ -->
+<div id="intro-overlay">
+    <div class="badge">VR SAFETY EXPERIENCE</div>
+    <h1>SENTINEL<span>ROAD SAFETY</span></h1>
+    <p>"See the risk. Feel the impact. Choose safety."<br>
+       An immersive scenario-based learning experience about road accidents.</p>
+    <button onclick="startSimulation()">▶ &nbsp; ENTER SIMULATION</button>
+    <p style="font-size:10px;color:#1a2233;letter-spacing:2px;margin-top:6px">IMMERSIVE · INTERACTIVE · EDUCATIONAL</p>
+</div>
 
-    <!-- Sky -->
-    <a-sky color="#87CEEB"></a-sky>
+<!-- CRASH FLASH -->
+<div id="crash-flash"></div>
 
-    <!-- Ground / Road -->
-    <a-plane position="0 0 -5" rotation="-90 0 0" width="30" height="30" color="#555"></a-plane>
+<!-- ════════════════════════════════
+     HUD
+════════════════════════════════ -->
+<div id="hud">
+    <div id="hud-top">
+        <div class="hud-box">
+            <div class="hud-lbl">SPEED</div>
+            <div class="hud-val" id="hud-speed">0 km/h</div>
+            <div class="hud-lbl" style="margin-top:8px">PHASE</div>
+            <div class="hud-val" id="hud-phase">—</div>
+        </div>
+        <div class="hud-box" style="text-align:right">
+            <div class="hud-lbl">SENTINEL VR</div>
+            <div class="hud-val" id="hud-timer">00:00</div>
+        </div>
+    </div>
+    <div id="phase-banner"></div>
+    <div id="progress-bar"><div id="progress-fill"></div></div>
+</div>
 
-    <!-- Title -->
-    <a-text value="SENTINEL VR - ROAD SAFETY AWARENESS"
-            position="-4 4 -6"
-            color="blue"
-            width="10">
-    </a-text>
+<!-- ════════════════════════════════
+     CONSEQUENCE SCREEN
+════════════════════════════════ -->
+<div id="consequence-screen">
+    <h2>IMPACT REPORT</h2>
+    <p class="sub">THE CONSEQUENCE OF ONE MISTAKE</p>
+    <div class="stat-row">
+        <div class="stat-card"><div class="stat-num">1.35M</div><div class="stat-lbl">Deaths / Year</div></div>
+        <div class="stat-card"><div class="stat-num">93%</div><div class="stat-lbl">Preventable</div></div>
+        <div class="stat-card"><div class="stat-num">₹3.8L</div><div class="stat-lbl">Avg. Cost</div></div>
+        <div class="stat-card"><div class="stat-num">4.3s</div><div class="stat-lbl">Reaction Gap</div></div>
+    </div>
+    <div class="impact-bars">
+        <div class="ibar-row"><span class="ibar-name">Overspeeding</span><div class="ibar-track"><div class="ibar-fill" id="b1" style="background:#e63946"></div></div></div>
+        <div class="ibar-row"><span class="ibar-name">Distraction</span><div class="ibar-track"><div class="ibar-fill" id="b2" style="background:#ffd60a"></div></div></div>
+        <div class="ibar-row"><span class="ibar-name">No helmet/belt</span><div class="ibar-track"><div class="ibar-fill" id="b3" style="background:#ff6b35"></div></div></div>
+        <div class="ibar-row"><span class="ibar-name">Signal jumping</span><div class="ibar-track"><div class="ibar-fill" id="b4" style="background:#c77dff"></div></div></div>
+        <div class="ibar-row"><span class="ibar-name">Drunk driving</span><div class="ibar-track"><div class="ibar-fill" id="b5" style="background:#4cc9f0"></div></div></div>
+    </div>
+    <button class="btn-green" onclick="showPrecautions()">VIEW SAFETY GUIDE & PRECAUTIONS ›</button>
+</div>
 
-    <!-- ================= SCENARIO 1 ================= -->
-    <!-- Car -->
-    <a-box position="-3 0.5 -3" color="red"></a-box>
+<!-- ════════════════════════════════
+     PRECAUTIONS SCREEN
+════════════════════════════════ -->
+<div id="prec-screen">
+    <h2>SAFETY PROTOCOL</h2>
+    <p class="sub">PRECAUTIONS · GUIDELINES · EMERGENCY SUPPORT</p>
+    <div class="prec-grid" id="prec-grid"></div>
+    <div class="insurance-box">
+        <div class="ins-title">⚕ ACCIDENT RESPONSE & INSURANCE SUPPORT</div>
+        <div class="ins-badges">
+            <span class="ins-badge">📞 Emergency: 112</span>
+            <span class="ins-badge">🏥 Trauma: 1800-111-363</span>
+            <span class="ins-badge">🚨 Traffic Helpline: 1095</span>
+            <span class="ins-badge">✅ Third Party Insurance</span>
+            <span class="ins-badge">🛡️ Comprehensive Cover</span>
+            <span class="ins-badge">💊 Personal Accident Cover</span>
+        </div>
+        <p class="ins-note">
+            In case of an accident: (1) Stop safely and check for injuries. (2) Call 112 immediately.
+            (3) Document the scene — photos and plate numbers. (4) File FIR within 24 hours.
+            (5) Notify your insurer within 48 hours. Cashless claims are available at network hospitals.
+        </p>
+    </div>
+    <button class="btn-red" onclick="restartSim()">↩ RESTART SIMULATION</button>
+</div>
 
-    <!-- Scenario Text -->
-    <a-text value="Scenario 1: Using Mobile While Driving"
-            position="-5 2 -3"
-            color="black">
-    </a-text>
+<!-- ════════════════════════════════
+     A-FRAME SCENE
+════════════════════════════════ -->
+<a-scene id="main-scene" style="display:none"
+    fog="type:linear; color:#b0d0ee; near:30; far:80"
+    renderer="antialias:true; colorManagement:true"
+    vr-mode-ui="enabled:true">
 
-    <a-text value="Driver is distracted..."
-            position="-5 1.5 -3"
-            color="red">
-    </a-text>
+    <!-- ══ SKY ══ -->
+    <a-sky id="sky" color="#87CEEB"></a-sky>
 
-    <a-text value="ACCIDENT OCCURS!"
-            position="-5 1 -3"
-            color="black">
-    </a-text>
+    <!-- ══ SUN ══ -->
+    <a-sphere position="20 25 -60" radius="3"
+        material="color:#FFF9C4; emissive:#FFF9C4; emissiveIntensity:1; shader:flat"></a-sphere>
 
-    <a-text value="Prevention: Avoid mobile usage while driving"
-            position="-5 0.5 -3"
-            color="green">
-    </a-text>
+    <!-- ══ LIGHTING ══ -->
+    <a-light type="ambient"     color="#ffffff" intensity="0.7"></a-light>
+    <a-light type="directional" position="10 20 -5" color="#fff8e1" intensity="1.2"
+        shadow="cast:true"></a-light>
 
-    <!-- ================= SCENARIO 2 ================= -->
-    <!-- Bike -->
-    <a-cylinder position="3 0.5 -3" radius="0.5" height="1" color="orange"></a-cylinder>
+    <!-- ══ GROUND / ROAD ══ -->
+    <!-- Grass left -->
+    <a-plane position="-18 0 -25" rotation="-90 0 0" width="20" height="100"
+        material="color:#4caf50; roughness:1"></a-plane>
+    <!-- Grass right -->
+    <a-plane position="18 0 -25" rotation="-90 0 0" width="20" height="100"
+        material="color:#4caf50; roughness:1"></a-plane>
+    <!-- Road surface -->
+    <a-plane id="road" position="0 0 -25" rotation="-90 0 0" width="12" height="100"
+        material="color:#2b2b2b; roughness:0.95"></a-plane>
 
-    <a-text value="Scenario 2: No Helmet"
-            position="1 2 -3"
-            color="black">
-    </a-text>
+    <!-- Road kerb left -->
+    <a-box position="-6.15 0.05 -25" width="0.3" height="0.12" depth="100"
+        material="color:#f0f0f0; roughness:0.8"></a-box>
+    <!-- Road kerb right -->
+    <a-box position="6.15 0.05 -25" width="0.3" height="0.12" depth="100"
+        material="color:#f0f0f0; roughness:0.8"></a-box>
 
-    <a-text value="Rider without helmet..."
-            position="1 1.5 -3"
-            color="red">
-    </a-text>
+    <!-- ══ LANE MARKINGS ══ -->
+    <!-- Centre dashes -->
+    <a-box position="0 0.02 -5"  width="0.18" height="0.01" depth="2.5" material="color:#ffe066"></a-box>
+    <a-box position="0 0.02 -10" width="0.18" height="0.01" depth="2.5" material="color:#ffe066"></a-box>
+    <a-box position="0 0.02 -15" width="0.18" height="0.01" depth="2.5" material="color:#ffe066"></a-box>
+    <a-box position="0 0.02 -20" width="0.18" height="0.01" depth="2.5" material="color:#ffe066"></a-box>
+    <a-box position="0 0.02 -25" width="0.18" height="0.01" depth="2.5" material="color:#ffe066"></a-box>
+    <a-box position="0 0.02 -30" width="0.18" height="0.01" depth="2.5" material="color:#ffe066"></a-box>
+    <a-box position="0 0.02 -35" width="0.18" height="0.01" depth="2.5" material="color:#ffe066"></a-box>
+    <a-box position="0 0.02 -40" width="0.18" height="0.01" depth="2.5" material="color:#ffe066"></a-box>
+    <a-box position="0 0.02 -45" width="0.18" height="0.01" depth="2.5" material="color:#ffe066"></a-box>
 
-    <a-text value="Severe head injury!"
-            position="1 1 -3"
-            color="black">
-    </a-text>
+    <!-- ══ TREES (left side) ══ -->
+    <!-- Tree 1 -->
+    <a-cylinder position="-9 0.8 -8"  radius="0.18" height="1.8" material="color:#5d4037"></a-cylinder>
+    <a-cone      position="-9 2.4 -8"  radius-bottom="1.1" radius-top="0" height="2.4" material="color:#2e7d32"></a-cone>
+    <!-- Tree 2 -->
+    <a-cylinder position="-9 0.8 -18" radius="0.18" height="1.8" material="color:#5d4037"></a-cylinder>
+    <a-cone      position="-9 2.4 -18" radius-bottom="1.1" radius-top="0" height="2.4" material="color:#388e3c"></a-cone>
+    <!-- Tree 3 -->
+    <a-cylinder position="-9 0.8 -30" radius="0.18" height="1.8" material="color:#5d4037"></a-cylinder>
+    <a-cone      position="-9 2.4 -30" radius-bottom="1.1" radius-top="0" height="2.4" material="color:#1b5e20"></a-cone>
 
-    <a-text value="Prevention: Always wear a helmet"
-            position="1 0.5 -3"
-            color="green">
-    </a-text>
+    <!-- Trees right side -->
+    <a-cylinder position="9 0.8 -12"  radius="0.18" height="1.8" material="color:#4e342e"></a-cylinder>
+    <a-cone      position="9 2.4 -12"  radius-bottom="1.1" radius-top="0" height="2.4" material="color:#43a047"></a-cone>
+    <a-cylinder position="9 0.8 -24"  radius="0.18" height="1.8" material="color:#4e342e"></a-cylinder>
+    <a-cone      position="9 2.4 -24"  radius-bottom="1.1" radius-top="0" height="2.4" material="color:#2e7d32"></a-cone>
+    <a-cylinder position="9 0.8 -38"  radius="0.18" height="1.8" material="color:#4e342e"></a-cylinder>
+    <a-cone      position="9 2.4 -38"  radius-bottom="1.1" radius-top="0" height="2.4" material="color:#388e3c"></a-cone>
 
-    <!-- ================= SCENARIO 3 ================= -->
-    <!-- Signal Violation -->
-    <a-box position="0 0.5 -7" color="yellow"></a-box>
+    <!-- ══ STREET LAMPS ══ -->
+    <!-- Left side -->
+    <a-entity position="-7.5 0 -10">
+        <a-cylinder radius="0.07" height="5" position="0 2.5 0" material="color:#333"></a-cylinder>
+        <a-box width="1" height="0.1" depth="0.1" position="0.5 5 0" material="color:#222"></a-box>
+        <a-sphere radius="0.18" position="1 5 0" material="color:#fffde7; emissive:#fffde7; emissiveIntensity:1.2"></a-sphere>
+        <a-light type="point" color="#ffe082" intensity="0.7" distance="14" position="1 4.9 0"></a-light>
+    </a-entity>
+    <a-entity position="-7.5 0 -28">
+        <a-cylinder radius="0.07" height="5" position="0 2.5 0" material="color:#333"></a-cylinder>
+        <a-box width="1" height="0.1" depth="0.1" position="0.5 5 0" material="color:#222"></a-box>
+        <a-sphere radius="0.18" position="1 5 0" material="color:#fffde7; emissive:#fffde7; emissiveIntensity:1.2"></a-sphere>
+        <a-light type="point" color="#ffe082" intensity="0.7" distance="14" position="1 4.9 0"></a-light>
+    </a-entity>
+    <!-- Right side -->
+    <a-entity position="7.5 0 -18">
+        <a-cylinder radius="0.07" height="5" position="0 2.5 0" material="color:#333"></a-cylinder>
+        <a-box width="1" height="0.1" depth="0.1" position="-0.5 5 0" material="color:#222"></a-box>
+        <a-sphere radius="0.18" position="-1 5 0" material="color:#fffde7; emissive:#fffde7; emissiveIntensity:1.2"></a-sphere>
+        <a-light type="point" color="#ffe082" intensity="0.7" distance="14" position="-1 4.9 0"></a-light>
+    </a-entity>
+    <a-entity position="7.5 0 -36">
+        <a-cylinder radius="0.07" height="5" position="0 2.5 0" material="color:#333"></a-cylinder>
+        <a-box width="1" height="0.1" depth="0.1" position="-0.5 5 0" material="color:#222"></a-box>
+        <a-sphere radius="0.18" position="-1 5 0" material="color:#fffde7; emissive:#fffde7; emissiveIntensity:1.2"></a-sphere>
+        <a-light type="point" color="#ffe082" intensity="0.7" distance="14" position="-1 4.9 0"></a-light>
+    </a-entity>
 
-    <a-text value="Scenario 3: Signal Violation"
-            position="-2 2 -7"
-            color="black">
-    </a-text>
+    <!-- ══ TRAFFIC LIGHT ══ -->
+    <a-entity id="traffic-light-pole" position="5.5 0 -18">
+        <!-- Pole -->
+        <a-cylinder radius="0.08" height="6" position="0 3 0" material="color:#222"></a-cylinder>
+        <!-- Housing -->
+        <a-box id="tl-housing" position="0 6.3 0" width="0.55" height="1.8" depth="0.4"
+            material="color:#111"></a-box>
+        <!-- Red -->
+        <a-sphere id="tl-red"    radius="0.17" position="0 6.9 0.22"
+            material="color:#660000; emissive:#660000; emissiveIntensity:0.4"></a-sphere>
+        <!-- Yellow -->
+        <a-sphere id="tl-yellow" radius="0.17" position="0 6.5 0.22"
+            material="color:#665500; emissive:#665500; emissiveIntensity:0.4"></a-sphere>
+        <!-- Green -->
+        <a-sphere id="tl-green"  radius="0.17" position="0 6.1 0.22"
+            material="color:#006600; emissive:#006600; emissiveIntensity:0.4"></a-sphere>
+    </a-entity>
 
-    <a-text value="Jumping red signal..."
-            position="-2 1.5 -7"
-            color="red">
-    </a-text>
+    <!-- ══ BUILDINGS (background) ══ -->
+    <a-box position="-22 6 -55" width="8"  height="12" depth="6" material="color:#455a64"></a-box>
+    <a-box position="-12 9 -60" width="6"  height="18" depth="5" material="color:#37474f"></a-box>
+    <a-box position="14  7 -55" width="7"  height="14" depth="6" material="color:#546e7a"></a-box>
+    <a-box position="24  5 -58" width="5"  height="10" depth="5" material="color:#607d8b"></a-box>
 
-    <a-text value="Crash happens!"
-            position="-2 1 -7"
-            color="black">
-    </a-text>
-
-    <a-text value="Prevention: Follow traffic rules"
-            position="-2 0.5 -7"
-            color="green">
-    </a-text>
-
-    <!-- ================= FINAL MESSAGE ================= -->
-    <a-text value="Drive Safe. Protect Lives."
-            position="-3 3 -10"
-            color="blue">
-    </a-text>
-
-    <a-text value="Every life is valuable."
-            position="-3 2.5 -10"
-            color="black">
-    </a-text>
-
-    <a-text value="Insurance helps in emergency situations."
-            position="-3 2 -10"
-            color="green">
-    </a-text>
-
-    <!-- Camera -->
-    <a-camera position="0 1.6 0"></a-camera>
-
-</a-scene>
-
-</body>
-</html>
+    <!-- ══ EGO VEHICLE (player / camera car) ══ -->
+    <a-entity id="ego-car" position="2 0 2">
+        <!-- Body -->
+        <a-box position="0 0.45 0" width="1.8" height="0.6" depth="3.6"
+            material="color:#1565c0; roughness:0.4; metalness:0.5"></a-box>
+        <!-- Roof -->
+        <a-box position="0 0.9 -0.2" width="1.5" height="0.38" depth="2.0"
+            material="color:#0d47a1; roughness:0.4; metalness:0.4"></a-box>
+        <!-- Windshield -->
+        <a-box position="0 0.86 0.82" width="1.42" height="0.34" depth="0.06"
+            material="color:#90caf9; opacity:0.45; transparent:true"></a-box>
